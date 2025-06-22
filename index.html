@@ -1,0 +1,260 @@
+<!DOCTYPE html>
+<html lang="de">
+<head>
+  <meta charset="UTF-8">
+  <title>WLED Pixel-Editor (Hex & Komprimiert)</title>
+  <style>
+    body { font-family: sans-serif; margin: 10px; }
+    canvas { border: 1px solid #ccc; cursor: crosshair; }
+    .color-box {
+      display: inline-block;
+      width: 24px; height: 24px;
+      border: 1px solid #000;
+      vertical-align: middle;
+      margin-left: 5px;
+    }
+    .recent-color {
+      display: inline-block;
+      width: 20px; height: 20px;
+      border: 1px solid #333;
+      margin: 2px;
+      cursor: pointer;
+    }
+  </style>
+</head>
+<body>
+  <h2>WLED Pixel-Editor (Hex & Komprimiert)</h2>
+
+  <div>
+    Matrix-Größe:
+    <select id="matrixSize">
+      <option value="8x8">8x8</option>
+      <option value="8x16">8x16</option>
+      <option value="16x8">16x8</option>
+      <option value="16x16" selected>16x16</option>
+    </select>
+    Pixelgröße:
+    <input type="number" id="pixelSize" value="20" min="5" max="50" style="width: 50px;" />
+    <button id="gridToggle">Gitter: An</button>
+    <button id="bgToggle">Hintergrund: Hell</button>
+  </div>
+
+  <div>
+    Farbe:
+    <input type="color" id="colorPicker" value="#0000ff" />
+    <div id="currentColor" class="color-box" style="background:#0000ff"></div>
+    <div id="recentColors"></div>
+  </div>
+
+  <div>
+    <button id="drawTool">Stift</button>
+    <button id="lineTool">Linie</button>
+    <button id="fillTool">Füllen</button>
+    <button id="undoBtn">Undo</button>
+    <button id="clearBtn">Clear</button>
+  </div>
+
+  <div>
+    <button id="exportBtn">Copy JSON</button>
+    <button id="saveBtn">Save JSON</button>
+    <input type="file" id="loadFile" />
+    <button id="screenshotBtn">Screenshot</button>
+  </div>
+
+  <div>
+    WLED IP:
+    <input type="text" id="wledIp" placeholder="192.168.x.x" />
+    <button id="sendBtn">Senden an WLED</button>
+    <span id="status"></span>
+  </div>
+
+  <canvas id="matrixCanvas"></canvas>
+
+  <script>
+const canvas = document.getElementById("matrixCanvas");
+const ctx = canvas.getContext("2d");
+let matrixW = 16, matrixH = 16, pixelSize = 20;
+let pixels = [];
+let history = [];
+let tool = 'draw';
+let gridOn = true;
+let bgDark = false;
+let recentColors = [];
+let lineStart = null;
+let mouseX = -1, mouseY = -1;
+
+function initPixels() {
+  pixels = [];
+  for (let y = 0; y < matrixH; y++) {
+    let row = [];
+    for (let x = 0; x < matrixW; x++) {
+      row.push("#000000");
+    }
+    pixels.push(row);
+  }
+  saveHistory();
+  drawMatrix();
+}
+
+function drawMatrix() {
+  canvas.width = matrixW * pixelSize;
+  canvas.height = matrixH * pixelSize;
+  ctx.fillStyle = bgDark ? "#111" : "#eee";
+  ctx.fillRect(0, 0, canvas.width, canvas.height);
+
+  for (let y = 0; y < matrixH; y++) {
+    for (let x = 0; x < matrixW; x++) {
+      const c = pixels[y][x];
+      if (c === "#000000") {
+        if ((x + y) % 2 === 0) {
+          ctx.fillStyle = bgDark ? "#444" : "#bbb";
+        } else {
+          ctx.fillStyle = bgDark ? "#222" : "#ddd";
+        }
+      } else {
+        ctx.fillStyle = c;
+      }
+      ctx.fillRect(x * pixelSize, y * pixelSize, pixelSize, pixelSize);
+      if (gridOn) {
+        ctx.strokeStyle = "#999";
+        ctx.strokeRect(x * pixelSize, y * pixelSize, pixelSize, pixelSize);
+      }
+    }
+  }
+}
+
+function saveHistory() {
+  history.push(JSON.stringify(pixels));
+  if (history.length > 20) history.shift();
+}
+
+function updateRecent(hex) {
+  if (recentColors.includes(hex)) return;
+  recentColors.unshift(hex);
+  if (recentColors.length > 10) recentColors.pop();
+  const container = document.getElementById("recentColors");
+  container.innerHTML = '';
+  recentColors.forEach(c => {
+    let el = document.createElement("div");
+    el.className = "recent-color";
+    el.style.background = c;
+    el.onclick = () => {
+      document.getElementById("colorPicker").value = c;
+      document.getElementById("currentColor").style.background = c;
+    };
+    container.appendChild(el);
+  });
+}
+
+canvas.addEventListener("click", (e) => {
+  const rect = canvas.getBoundingClientRect();
+  const x = Math.floor((e.clientX - rect.left) / pixelSize);
+  const y = Math.floor((e.clientY - rect.top) / pixelSize);
+  if (x<0 || y<0 || x>=matrixW || y>=matrixH) return;
+  saveHistory();
+  if (tool === 'draw') {
+    const col = document.getElementById("colorPicker").value;
+    pixels[y][x] = col;
+    updateRecent(col);
+  }
+  drawMatrix();
+});
+
+canvas.addEventListener("contextmenu", (e) => {
+  e.preventDefault();
+  const rect = canvas.getBoundingClientRect();
+  const x = Math.floor((e.clientX - rect.left) / pixelSize);
+  const y = Math.floor((e.clientY - rect.top) / pixelSize);
+  if (x<0 || y<0 || x>=matrixW || y>=matrixH) return;
+  saveHistory();
+  pixels[y][x] = "#000000";
+  drawMatrix();
+});
+
+document.getElementById("drawTool").addEventListener("click", () => { tool = 'draw'; });
+document.getElementById("colorPicker").addEventListener("input", (e) => {
+  document.getElementById("currentColor").style.background = e.target.value;
+});
+
+// Komprimierung + Export
+function generateCompressedArray() {
+  const flat = [];
+  for (let y=0; y<matrixH; y++) {
+    for (let x=0; x<matrixW; x++) {
+      flat.push(pixels[y][x].replace("#",""));
+    }
+  }
+  const compressed = [];
+  let currentColor = flat[0];
+  let count = 0;
+  for (let i=0; i<flat.length; i++) {
+    if (flat[i] === currentColor) {
+      count++;
+    } else {
+      if (count === 1) {
+        compressed.push(currentColor);
+      } else {
+        compressed.push(i - count, i - 1, currentColor);
+      }
+      currentColor = flat[i];
+      count = 1;
+    }
+  }
+  if (count === 1) {
+    compressed.push(currentColor);
+  } else {
+    compressed.push(flat.length - count, flat.length - 1, currentColor);
+  }
+  return compressed;
+}
+
+document.getElementById("exportBtn").addEventListener("click", () => {
+  const json = {"seg":[{"i":generateCompressedArray()}]};
+  navigator.clipboard.writeText(JSON.stringify(json));
+  alert("JSON kopiert!");
+});
+
+document.getElementById("sendBtn").addEventListener("click", () => {
+  const ip = document.getElementById("wledIp").value.trim();
+  if (!ip) return alert("Bitte WLED IP eingeben!");
+  const json = {"seg":[{"i":generateCompressedArray()}]};
+  fetch(`http://${ip}/json/state`, {
+    method: "POST",
+    headers: { "Content-Type": "application/json" },
+    body: JSON.stringify(json)
+  }).then(res => {
+    if (res.ok) {
+      document.getElementById("status").innerText = "Erfolgreich gesendet!";
+    } else {
+      document.getElementById("status").innerText = "Fehler!";
+    }
+  }).catch(() => {
+    document.getElementById("status").innerText = "Fehler!";
+  });
+});
+
+document.getElementById("matrixSize").addEventListener("change", (e) => {
+  const parts = e.target.value.split("x");
+  matrixW = parseInt(parts[0]);
+  matrixH = parseInt(parts[1]);
+  initPixels();
+});
+document.getElementById("pixelSize").addEventListener("input", (e) => {
+  pixelSize = parseInt(e.target.value);
+  drawMatrix();
+});
+document.getElementById("gridToggle").addEventListener("click", () => {
+  gridOn = !gridOn;
+  document.getElementById("gridToggle").innerText = "Gitter: " + (gridOn ? "An" : "Aus");
+  drawMatrix();
+});
+document.getElementById("bgToggle").addEventListener("click", () => {
+  bgDark = !bgDark;
+  document.getElementById("bgToggle").innerText = "Hintergrund: " + (bgDark ? "Dunkel" : "Hell");
+  drawMatrix();
+});
+
+initPixels();
+  </script>
+</body>
+</html>
