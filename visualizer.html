@@ -1,0 +1,75 @@
+<!DOCTYPE html>
+<html lang="de">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>WLED JSON Visualizer 16×16 (Diskrete Farben)</title>
+  <style>
+    body { font-family: sans-serif; padding: 20px; }
+    #ledCanvas { border: 1px solid #ccc; image-rendering: pixelated; margin-top: 20px; }
+    label, textarea, button { display: block; margin-top: 10px; width: 100%; }
+    textarea { font-family: monospace; height: 200px; }
+  </style>
+</head>
+<body>
+  <h1>WLED JSON Visualizer (16×16 Matrix)</h1>
+  <p>Für PixArt JSON mit diskreter Farbzuweisung:</p>
+  <textarea id="jsonInput" placeholder="Füge dein PixArt-JSON hier ein"></textarea>
+  <button id="renderBtn">Rendern</button>
+  <canvas id="ledCanvas"></canvas>
+
+  <script>
+    function parseJson() {
+      const txt = document.getElementById('jsonInput').value.trim();
+      if (!txt) return null;
+      try { return JSON.parse(txt); }
+      catch (e) { alert('Ungültiges JSON: ' + e.message); return null; }
+    }
+    function hexClean(h) {
+      return '#' + h.replace(/^#/, '').padStart(6, '0');
+    }
+    function renderMatrix() {
+      const data = parseJson();
+      if (!data || !data.seg || !Array.isArray(data.seg.i)) return;
+      const idxArr = data.seg.i;
+      const cols = 16, rows = 16, sz = 20;
+      const total = cols * rows;
+      const canvas = document.getElementById('ledCanvas');
+      canvas.width = cols * sz;
+      canvas.height = rows * sz;
+      const ctx = canvas.getContext('2d');
+      // Schwarz initialisieren
+      const leds = new Array(total).fill('#000000');
+      let p = 0;
+      while (p < idxArr.length) {
+        const start = Math.max(0, Math.min(total-1, idxArr[p++]));
+        const stop  = Math.max(0, Math.min(total-1, idxArr[p++]));
+        const colors = [];
+        while (p < idxArr.length && typeof idxArr[p] === 'string') {
+          colors.push(idxArr[p++]);
+        }
+        if (!colors.length) continue;
+        // 1) erste Farbe konstant für Bereich
+        const base = hexClean(colors[0]);
+        for (let i = start; i <= stop; i++) leds[i] = base;
+        // 2) diskrete Pixel für weitere Farben
+        for (let j = 1; j < colors.length; j++) {
+          const pos = stop + j;
+          if (pos < total) {
+            leds[pos] = hexClean(colors[j]);
+          }
+        }
+      }
+      // Zeichnen
+      ctx.clearRect(0,0,canvas.width,canvas.height);
+      for (let i = 0; i < total; i++) {
+        const x = (i % cols)*sz;
+        const y = Math.floor(i/cols)*sz;
+        ctx.fillStyle = leds[i];
+        ctx.fillRect(x, y, sz, sz);
+      }
+    }
+    document.getElementById('renderBtn').addEventListener('click', renderMatrix);
+  </script>
+</body>
+</html>
