@@ -1,397 +1,511 @@
 <!DOCTYPE html>
 <html lang="de">
+
 <head>
-  <meta charset="UTF-8">
-  <title>WLED Pixel-Editor</title>
-  <style>
-    body { font-family: sans-serif; margin: 10px; }
-    canvas { border: 1px solid #ccc; cursor: crosshair; }
-    .color-box {
-      display: inline-block;
-      width: 24px; height: 24px;
-      border: 1px solid #000;
-      vertical-align: middle;
-      margin-left: 5px;
-    }
-    .recent-color {
-      display: inline-block;
-      width: 20px; height: 20px;
-      border: 1px solid #333;
-      margin: 2px;
-      cursor: pointer;
-    }
-  </style>
+    <meta charset="UTF-8">
+    <title>WLED Pixel-Schubser</title>
+    <style>
+        :root {
+            --color-border: #ccc;
+            --color-accent: #4a90e2;
+            --color-bg-light: #fafafa;
+            --spacing-xs: 0.25rem;
+            --spacing-sm: 0.5rem;
+            --spacing-md: 1rem;
+            --spacing-lg: 1.5rem;
+        }
+
+        body {
+            font-family: sans-serif;
+            margin: 10px;
+        }
+
+        canvas {
+            border: 1px solid #ccc;
+            cursor: crosshair;
+        }
+
+        .color-box {
+            display: inline-block;
+            width: 24px;
+            height: 24px;
+            border: 1px solid #000;
+            vertical-align: middle;
+            margin-left: 5px;
+        }
+
+        #recentColors {
+            height: 30px;
+        }
+
+        .recent-color {
+            display: inline-block;
+            width: 20px;
+            height: 20px;
+            border: 1px solid #333;
+            margin: 2px;
+            cursor: pointer;
+        }
+
+        #tools {
+            display: flex;
+            flex-direction: column;
+            gap: 10px;
+            /* Abstand zwischen den Buttons */
+        }
+
+        #tools button {
+            width: 40px;
+            height: 40px;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            border: 1px solid #ccc;
+            background: #f9f9f9;
+            cursor: pointer;
+        }
+
+        #tools button.active {
+            background-color: var(--color-accent);
+            color: white;
+            border-color: var(--color-accent);
+            box-shadow: 0 0 0 2px rgba(0, 0, 0, 0.1);
+        }
+
+        #tools span {
+            margin-top: 50px;
+        }
+
+        #drawingtools {
+            display: flex;
+            align-items: flex-start;
+            /* Buttons oben ausrichten */
+            gap: 20px;
+            /* Abstand zwischen Tools und Canvas */
+        }
+
+        fieldset {
+            border: 1px solid var(--color-border);
+            border-radius: 4px;
+            background: var(--color-bg-light);
+            margin: var(--spacing-lg) 0;
+            padding: var(--spacing-md);
+        }
+
+        legend {
+            padding: 0 var(--spacing-sm);
+            font-weight: bold;
+            font-size: 1.1rem;
+            color: var(--color-accent);
+        }
+    </style>
+    <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/4.7.0/css/font-awesome.min.css">
 </head>
+
 <body>
-  <h2>WLED Pixel-Editor</h2>
+    <h2>WLED Pixel-Editor</h2>
 
-  <div>
-    Matrix-Größe:
-    <select id="matrixSize">
-      <option value="8x8">8x8</option>
-      <option value="8x16">8x16</option>
-      <option value="16x8">16x8</option>
-      <option value="16x16" selected>16x16</option>
-    </select>
-    Pixelgröße:
-    <input type="number" id="pixelSize" value="20" min="5" max="50" style="width: 50px;" />
-    <button id="gridToggle">Gitter: An</button>
-    <button id="bgToggle">Hintergrund: Hell</button>
-  </div>
+    <fieldset class="summary-frame">
+        <legend>JSON / WLED</legend>
+        <div>
+            <button id="exportBtn">Copy JSON</button>
+            <button id="saveBtn">Save JSON</button>
+            <input type="file" id="loadFile" />
+            <button id="screenshotBtn">Screenshot</button>
+        </div>
 
-  <div>
-    Farbe:
-    <input type="color" id="colorPicker" value="#0000ff" />
-    <div id="currentColor" class="color-box" style="background:#0000ff"></div>
-    <div id="recentColors"></div>
-  </div>
+        <div>
+            WLED IP:
+            <input type="text" id="wledIp" placeholder="192.168.x.x" />
+            <button id="sendBtn">Senden an WLED</button>
+            <span id="status"></span>
+        </div>
+    </fieldset>
 
-  <div>
-    <button id="drawTool">Stift</button>
-    <button id="lineTool">Linie</button>
-    <button id="fillTool">Füllen</button>
-    <button id="undoBtn">Undo</button>
-    <button id="clearBtn">Clear</button>
-  </div>
+    <fieldset class="summary-frame">
+        <legend>Einstellungen zur Matrix</legend>
+        <div>
+            Matrix-Größe:
+            <select id="matrixSize">
+                <option value="8x8">8x8</option>
+                <option value="8x16">8x16</option>
+                <option value="16x8">16x8</option>
+                <option value="16x16" selected>16x16</option>
+            </select>
+            Pixelgröße:
+            <input type="number" id="pixelSize" value="20" min="5" max="50" style="width: 50px;" />
+            <button id="gridToggle">Gitter: An</button>
+            <button id="bgToggle">Hintergrund: Hell</button>
+        </div>
+    </fieldset>
 
-  <div>
-    <button id="exportBtn">Copy JSON</button>
-    <button id="saveBtn">Save JSON</button>
-    <input type="file" id="loadFile" />
-    <button id="screenshotBtn">Screenshot</button>
-  </div>
+    <div id="drawingtools">
+        <div id="tools">
+            <button id="drawTool"><i class="fa fa-pencil" aria-hidden="true"></i></button>
+            <button id="lineTool"><i class="fa fa-minus" aria-hidden="true"></i></button>
+            <button id="fillTool"><i class="fa fa-tint" aria-hidden="true"></i></button>
+            <hr>
+            <button id="undoBtn"><i class="fa fa-undo" aria-hidden="true"></i></button>
+            <button id="clearBtn"><i class="fa fa-trash" aria-hidden="true"></i></button>
 
-  <div>
-    WLED IP:
-    <input type="text" id="wledIp" placeholder="192.168.x.x" />
-    <button id="sendBtn">Senden an WLED</button>
-    <span id="status"></span>
-  </div>
+        </div>
 
-  <canvas id="matrixCanvas"></canvas>
-<script>
-const canvas = document.getElementById("matrixCanvas");
-const ctx = canvas.getContext("2d");
-let matrixW = 16, matrixH = 16, pixelSize = 20;
-let pixels = [];
-let history = [];
-let tool = 'draw';
-let gridOn = true;
-let bgDark = false;
-let recentColors = [];
-let lineStart = null;
-let mouseX = -1, mouseY = -1;
+        <canvas id="matrixCanvas"></canvas>
 
-function initPixels() {
-  pixels = [];
-  for (let y = 0; y < matrixH; y++) {
-    let row = [];
-    for (let x = 0; x < matrixW; x++) {
-      row.push([0,0,0]);
-    }
-    pixels.push(row);
-  }
-  saveHistory();
-  drawMatrix();
-}
+        <div>
+            Farbe:
+            <input type="color" id="colorPicker" value="#0000ff" />
+            <!-- <div id="currentColor" class="color-box" style="background:#0000ff"></div> -->
+            <div id="recentColors">&nbsp;</div>
+        </div>
 
-function drawMatrix() {
-  canvas.width = matrixW * pixelSize;
-  canvas.height = matrixH * pixelSize;
-  ctx.fillStyle = bgDark ? "#111" : "#eee";
-  ctx.fillRect(0, 0, canvas.width, canvas.height);
+    </div>
 
-  for (let y = 0; y < matrixH; y++) {
-    for (let x = 0; x < matrixW; x++) {
-      const c = pixels[y][x];
-      if (c[0] === 0 && c[1] === 0 && c[2] === 0) {
-        if ((x + y) % 2 === 0) {
-          ctx.fillStyle = bgDark ? "#444" : "#bbb";
-        } else {
-          ctx.fillStyle = bgDark ? "#222" : "#ddd";
-        }
-      } else {
-        ctx.fillStyle = `rgb(${c[0]},${c[1]},${c[2]})`;
-      }
-      ctx.fillRect(x * pixelSize, y * pixelSize, pixelSize, pixelSize);
-      if (gridOn) {
-        ctx.strokeStyle = "#999";
-        ctx.strokeRect(x * pixelSize, y * pixelSize, pixelSize, pixelSize);
-      }
-    }
-  }
 
-  if (tool === 'line' && lineStart !== null && mouseX >=0 && mouseY >=0) {
-    ctx.strokeStyle = "rgba(0,0,0,0.5)";
-    ctx.lineWidth = 2;
-    ctx.beginPath();
-    ctx.moveTo(lineStart.x * pixelSize + pixelSize/2, lineStart.y * pixelSize + pixelSize/2);
-    ctx.lineTo(mouseX * pixelSize + pixelSize/2, mouseY * pixelSize + pixelSize/2);
-    ctx.stroke();
-  }
-}
+    <script>
+// nur auf die drei Tool-Buttons anwenden
+const toolButtons = document.querySelectorAll('#tools button:nth-child(-n+3)');
 
-function saveHistory() {
-  history.push(JSON.stringify(pixels));
-  if (history.length > 20) history.shift();
-}
-
-function hexToRgb(hex) {
-  let bigint = parseInt(hex.slice(1), 16);
-  let r = (bigint >> 16) & 255;
-  let g = (bigint >> 8) & 255;
-  let b = bigint & 255;
-  return [r, g, b];
-}
-
-function updateRecent(colorHex) {
-  if (recentColors.includes(colorHex)) return;
-  recentColors.unshift(colorHex);
-  if (recentColors.length > 10) recentColors.pop();
-  const container = document.getElementById("recentColors");
-  container.innerHTML = '';
-  recentColors.forEach(c => {
-    let el = document.createElement("div");
-    el.className = "recent-color";
-    el.style.background = c;
-    el.onclick = () => {
-      document.getElementById("colorPicker").value = c;
-      document.getElementById("currentColor").style.background = c;
-    };
-    container.appendChild(el);
-  });
-}
-
-canvas.addEventListener("click", (e) => {
-  const rect = canvas.getBoundingClientRect();
-  const x = Math.floor((e.clientX - rect.left) / pixelSize);
-  const y = Math.floor((e.clientY - rect.top) / pixelSize);
-  if (x<0 || y<0 || x>=matrixW || y>=matrixH) return;
-  saveHistory();
-  if (tool === 'draw') {
-    const col = hexToRgb(document.getElementById("colorPicker").value);
-    pixels[y][x] = col;
-    updateRecent(document.getElementById("colorPicker").value);
-  } else if (tool === 'line') {
-    if (!lineStart) {
-      lineStart = {x,y};
-    } else {
-      drawLine(lineStart.x, lineStart.y, x, y, hexToRgb(document.getElementById("colorPicker").value));
-      updateRecent(document.getElementById("colorPicker").value);
-      lineStart = null;
-    }
-  } else if (tool === 'fill') {
-    floodFill(x,y,pixels[y][x],hexToRgb(document.getElementById("colorPicker").value));
-    updateRecent(document.getElementById("colorPicker").value);
-  }
-  drawMatrix();
-});
-
-canvas.addEventListener("mousemove", (e) => {
-  const rect = canvas.getBoundingClientRect();
-  mouseX = Math.floor((e.clientX - rect.left) / pixelSize);
-  mouseY = Math.floor((e.clientY - rect.top) / pixelSize);
-  if (tool === 'line' && lineStart) {
-    drawMatrix();
-  }
-});
-
-canvas.addEventListener("contextmenu", (e) => {
-  e.preventDefault();
-  const rect = canvas.getBoundingClientRect();
-  const x = Math.floor((e.clientX - rect.left) / pixelSize);
-  const y = Math.floor((e.clientY - rect.top) / pixelSize);
-  if (x<0 || y<0 || x>=matrixW || y>=matrixH) return;
-  saveHistory();
-  pixels[y][x] = [0,0,0];
-  drawMatrix();
-});
-
-canvas.addEventListener("dblclick", () => { tool = 'draw'; lineStart = null; });
-
-function drawLine(x0,y0,x1,y1,color) {
-  let dx = Math.abs(x1 - x0), sx = x0 < x1 ? 1 : -1;
-  let dy = -Math.abs(y1 - y0), sy = y0 < y1 ? 1 : -1;
-  let err = dx + dy, e2;
-  while (true) {
-    if (x0>=0 && x0<matrixW && y0>=0 && y0<matrixH)
-      pixels[y0][x0] = color;
-    if (x0 === x1 && y0 === y1) break;
-    e2 = 2 * err;
-    if (e2 >= dy) { err += dy; x0 += sx; }
-    if (e2 <= dx) { err += dx; y0 += sy; }
-  }
-}
-
-function floodFill(x, y, target, replacement) {
-  if (JSON.stringify(target) === JSON.stringify(replacement)) return;
-  const stack = [{x,y}];
-  while (stack.length > 0) {
-    const n = stack.pop();
-    if (n.x<0 || n.x>=matrixW || n.y<0 || n.y>=matrixH) continue;
-    if (JSON.stringify(pixels[n.y][n.x]) !== JSON.stringify(target)) continue;
-    pixels[n.y][n.x] = replacement;
-    stack.push({x:n.x+1,y:n.y});
-    stack.push({x:n.x-1,y:n.y});
-    stack.push({x:n.x,y:n.y+1});
-    stack.push({x:n.x,y:n.y-1});
-  }
-}
-
-document.getElementById("drawTool").addEventListener("click", () => { tool = 'draw'; lineStart = null; });
-document.getElementById("lineTool").addEventListener("click", () => { tool = 'line'; lineStart = null; });
-document.getElementById("fillTool").addEventListener("click", () => { tool = 'fill'; });
-
-document.getElementById("colorPicker").addEventListener("input", (e) => {
-  document.getElementById("currentColor").style.background = e.target.value;
-});
-
-// Teil 2 Ende
-</script>
-<script>
-// Undo / Clear
-document.getElementById("undoBtn").addEventListener("click", () => {
-  if (history.length > 0) {
-    pixels = JSON.parse(history.pop());
-    drawMatrix();
-  }
-});
-document.getElementById("clearBtn").addEventListener("click", () => {
-  saveHistory();
-  initPixels();
-});
-
-// JSON Export / Import / Screenshot
-// Neuer Export-Handler: Flat-Hex, Run-Length-Encoding, PixArt-Format
-document.getElementById("exportBtn").addEventListener("click", () => {
-  const flatHex = [];
-  for (let y = 0; y < matrixH; y++) {
-    for (let x = 0; x < matrixW; x++) {
-      const [r, g, b] = pixels[y][x];
-      const hex = ((1 << 24) | (r << 16) | (g << 8) | b)
-        .toString(16)
-        .slice(1)
-        .toUpperCase();
-      flatHex.push(hex);
-    }
-  }
-
-  const runs = [];
-  let i = 0, len = flatHex.length;
-  while (i < len) {
-    const color = flatHex[i];
-    let j = i + 1;
-    while (j < len && flatHex[j] === color) j++;
-    runs.push([i, j - 1, color]);
-    i = j;
-  }
-
-  const compressed = [];
-  runs.forEach(run => compressed.push(run[0], run[1], run[2]));
-
-  const payload = { on: true, bri: 255, seg: { id: 0, i: compressed } };
-
-  const json = JSON.stringify(payload);
-  navigator.clipboard.writeText(json)
-    .then(() => alert("JSON kopiert!"))
-    .catch(err => alert("Fehler beim Kopieren: " + err));
-});
-
-document.getElementById("saveBtn").addEventListener("click", () => {
-  const blob = new Blob([JSON.stringify(pixels)], {type:"application/json"});
-  const url = URL.createObjectURL(blob);
-  const a = document.createElement("a");
-  a.href = url;
-  a.download = "matrix.json";
-  a.click();
-});
-document.getElementById("loadFile").addEventListener("change", (e) => {
-  const file = e.target.files[0];
-  const reader = new FileReader();
-  reader.onload = () => {
-    pixels = JSON.parse(reader.result);
-    drawMatrix();
-  };
-  reader.readAsText(file);
-});
-document.getElementById("screenshotBtn").addEventListener("click", () => {
-  const link = document.createElement("a");
-  link.href = canvas.toDataURL();
-  link.download = "matrix.png";
-  link.click();
-});
-
-// WLED senden
-document.getElementById("sendBtn").addEventListener("click", () => {
-  const ip = document.getElementById("wledIp").value.trim();
-  if (!ip) return alert("Bitte WLED IP eingeben!");
-  const flat = [];
-  for (let y = 0; y < matrixH; y++) {
-    for (let x = 0; x < matrixW; x++) {
-      flat.push(...pixels[y][x]);
-    }
-  }
-  fetch(`http://${ip}/json/state`, {
-    method: "POST",
-    headers: { "Content-Type": "application/json" },
-    body: JSON.stringify({seg:[{i:flat}]})
-  }).then(res => {
-    document.getElementById("status").innerText = res.ok ? "Erfolgreich gesendet!" : "Fehler!";
-  }).catch(() => {
-    document.getElementById("status").innerText = "Fehler!";
+toolButtons.forEach(btn => {
+  btn.addEventListener('click', () => {
+    // alte Selektion entfernen
+    document
+      .querySelector('#tools button.active')
+      ?.classList.remove('active');
+    // neue Selektion setzen
+    btn.classList.add('active');
   });
 });
 
-// Matrix-Größe / Pixelgröße / Gitter / Hintergrund
-document.getElementById("matrixSize").addEventListener("change", (e) => {
-  const parts = e.target.value.split("x");
-  matrixW = parseInt(parts[0]);
-  matrixH = parseInt(parts[1]);
-  initPixels();
-});
-document.getElementById("pixelSize").addEventListener("input", (e) => {
-  pixelSize = parseInt(e.target.value);
-  drawMatrix();
-});
-document.getElementById("gridToggle").addEventListener("click", () => {
-  gridOn = !gridOn;
-  document.getElementById("gridToggle").innerText = "Gitter: " + (gridOn ? "An" : "Aus");
-  drawMatrix();
-});
-document.getElementById("bgToggle").addEventListener("click", () => {
-  bgDark = !bgDark;
-  document.getElementById("bgToggle").innerText = "Hintergrund: " + (bgDark ? "Dunkel" : "Hell");
-  drawMatrix();
-});
+// (optional) initial einen Default-Tool aktivieren:
+document.getElementById('drawTool').classList.add('active');
 
-// Pfeiltasten verschieben
-document.addEventListener("keydown", (e) => {
-  if (["ArrowUp","ArrowDown","ArrowLeft","ArrowRight"].includes(e.key)) {
-    saveHistory();
-    let newPixels = [];
-    for (let y=0; y<matrixH; y++) {
-      let row = [];
-      for (let x=0; x<matrixW; x++) {
-        row.push([0,0,0]);
-      }
-      newPixels.push(row);
-    }
-    for (let y=0; y<matrixH; y++) {
-      for (let x=0; x<matrixW; x++) {
-        let ny = y + (e.key==="ArrowDown"?-1:e.key==="ArrowUp"?1:0);
-        let nx = x + (e.key==="ArrowRight"?-1:e.key==="ArrowLeft"?1:0);
-        if (ny>=0 && ny<matrixH && nx>=0 && nx<matrixW) {
-          newPixels[y][x] = pixels[ny][nx];
+
+
+
+        const canvas = document.getElementById("matrixCanvas");
+        const ctx = canvas.getContext("2d");
+        let matrixW = 16, matrixH = 16, pixelSize = 20;
+        let pixels = [];
+        let history = [];
+        let tool = 'draw';
+        let gridOn = true;
+        let bgDark = false;
+        let recentColors = [];
+        let lineStart = null;
+        let mouseX = -1, mouseY = -1;
+
+        function initPixels() {
+            pixels = [];
+            for (let y = 0; y < matrixH; y++) {
+                let row = [];
+                for (let x = 0; x < matrixW; x++) {
+                    row.push([0, 0, 0]);
+                }
+                pixels.push(row);
+            }
+            saveHistory();
+            drawMatrix();
         }
-      }
-    }
-    pixels = newPixels;
-    drawMatrix();
-  }
-});
 
-// Init
-initPixels();
-</script>
+        function drawMatrix() {
+            canvas.width = matrixW * pixelSize;
+            canvas.height = matrixH * pixelSize;
+            ctx.fillStyle = bgDark ? "#111" : "#eee";
+            ctx.fillRect(0, 0, canvas.width, canvas.height);
+
+            for (let y = 0; y < matrixH; y++) {
+                for (let x = 0; x < matrixW; x++) {
+                    const c = pixels[y][x];
+                    if (c[0] === 0 && c[1] === 0 && c[2] === 0) {
+                        if ((x + y) % 2 === 0) {
+                            ctx.fillStyle = bgDark ? "#444" : "#bbb";
+                        } else {
+                            ctx.fillStyle = bgDark ? "#222" : "#ddd";
+                        }
+                    } else {
+                        ctx.fillStyle = `rgb(${c[0]},${c[1]},${c[2]})`;
+                    }
+                    ctx.fillRect(x * pixelSize, y * pixelSize, pixelSize, pixelSize);
+                    if (gridOn) {
+                        ctx.strokeStyle = "#999";
+                        ctx.strokeRect(x * pixelSize, y * pixelSize, pixelSize, pixelSize);
+                    }
+                }
+            }
+
+            if (tool === 'line' && lineStart !== null && mouseX >= 0 && mouseY >= 0) {
+                ctx.strokeStyle = "rgba(0,0,0,0.5)";
+                ctx.lineWidth = 2;
+                ctx.beginPath();
+                ctx.moveTo(lineStart.x * pixelSize + pixelSize / 2, lineStart.y * pixelSize + pixelSize / 2);
+                ctx.lineTo(mouseX * pixelSize + pixelSize / 2, mouseY * pixelSize + pixelSize / 2);
+                ctx.stroke();
+            }
+        }
+
+        function saveHistory() {
+            history.push(JSON.stringify(pixels));
+            if (history.length > 20) history.shift();
+        }
+
+        function hexToRgb(hex) {
+            let bigint = parseInt(hex.slice(1), 16);
+            let r = (bigint >> 16) & 255;
+            let g = (bigint >> 8) & 255;
+            let b = bigint & 255;
+            return [r, g, b];
+        }
+
+        function updateRecent(colorHex) {
+            if (recentColors.includes(colorHex)) return;
+            recentColors.unshift(colorHex);
+            if (recentColors.length > 10) recentColors.pop();
+            const container = document.getElementById("recentColors");
+            container.innerHTML = '';
+            recentColors.forEach(c => {
+                let el = document.createElement("div");
+                el.className = "recent-color";
+                el.style.background = c;
+                el.onclick = () => {
+                    document.getElementById("colorPicker").value = c;
+                    document.getElementById("currentColor").style.background = c;
+                };
+                container.appendChild(el);
+            });
+        }
+
+        canvas.addEventListener("click", (e) => {
+            const rect = canvas.getBoundingClientRect();
+            const x = Math.floor((e.clientX - rect.left) / pixelSize);
+            const y = Math.floor((e.clientY - rect.top) / pixelSize);
+            if (x < 0 || y < 0 || x >= matrixW || y >= matrixH) return;
+            saveHistory();
+            if (tool === 'draw') {
+                const col = hexToRgb(document.getElementById("colorPicker").value);
+                pixels[y][x] = col;
+                updateRecent(document.getElementById("colorPicker").value);
+            } else if (tool === 'line') {
+                if (!lineStart) {
+                    lineStart = { x, y };
+                } else {
+                    drawLine(lineStart.x, lineStart.y, x, y, hexToRgb(document.getElementById("colorPicker").value));
+                    updateRecent(document.getElementById("colorPicker").value);
+                    lineStart = null;
+                }
+            } else if (tool === 'fill') {
+                floodFill(x, y, pixels[y][x], hexToRgb(document.getElementById("colorPicker").value));
+                updateRecent(document.getElementById("colorPicker").value);
+            }
+            drawMatrix();
+        });
+
+        canvas.addEventListener("mousemove", (e) => {
+            const rect = canvas.getBoundingClientRect();
+            mouseX = Math.floor((e.clientX - rect.left) / pixelSize);
+            mouseY = Math.floor((e.clientY - rect.top) / pixelSize);
+            if (tool === 'line' && lineStart) {
+                drawMatrix();
+            }
+        });
+
+        canvas.addEventListener("contextmenu", (e) => {
+            e.preventDefault();
+            const rect = canvas.getBoundingClientRect();
+            const x = Math.floor((e.clientX - rect.left) / pixelSize);
+            const y = Math.floor((e.clientY - rect.top) / pixelSize);
+            if (x < 0 || y < 0 || x >= matrixW || y >= matrixH) return;
+            saveHistory();
+            pixels[y][x] = [0, 0, 0];
+            drawMatrix();
+        });
+
+        canvas.addEventListener("dblclick", () => { tool = 'draw'; lineStart = null; });
+
+        function drawLine(x0, y0, x1, y1, color) {
+            let dx = Math.abs(x1 - x0), sx = x0 < x1 ? 1 : -1;
+            let dy = -Math.abs(y1 - y0), sy = y0 < y1 ? 1 : -1;
+            let err = dx + dy, e2;
+            while (true) {
+                if (x0 >= 0 && x0 < matrixW && y0 >= 0 && y0 < matrixH)
+                    pixels[y0][x0] = color;
+                if (x0 === x1 && y0 === y1) break;
+                e2 = 2 * err;
+                if (e2 >= dy) { err += dy; x0 += sx; }
+                if (e2 <= dx) { err += dx; y0 += sy; }
+            }
+        }
+
+        function floodFill(x, y, target, replacement) {
+            if (JSON.stringify(target) === JSON.stringify(replacement)) return;
+            const stack = [{ x, y }];
+            while (stack.length > 0) {
+                const n = stack.pop();
+                if (n.x < 0 || n.x >= matrixW || n.y < 0 || n.y >= matrixH) continue;
+                if (JSON.stringify(pixels[n.y][n.x]) !== JSON.stringify(target)) continue;
+                pixels[n.y][n.x] = replacement;
+                stack.push({ x: n.x + 1, y: n.y });
+                stack.push({ x: n.x - 1, y: n.y });
+                stack.push({ x: n.x, y: n.y + 1 });
+                stack.push({ x: n.x, y: n.y - 1 });
+            }
+        }
+
+        document.getElementById("drawTool").addEventListener("click", () => { tool = 'draw'; lineStart = null; });
+        document.getElementById("lineTool").addEventListener("click", () => { tool = 'line'; lineStart = null; });
+        document.getElementById("fillTool").addEventListener("click", () => { tool = 'fill'; });
+
+        document.getElementById("colorPicker").addEventListener("input", (e) => {
+            document.getElementById("currentColor").style.background = e.target.value;
+        });
+
+        // Teil 2 Ende
+    </script>
+    <script>
+        // Undo / Clear
+        document.getElementById("undoBtn").addEventListener("click", () => {
+            if (history.length > 0) {
+                pixels = JSON.parse(history.pop());
+                drawMatrix();
+            }
+        });
+        document.getElementById("clearBtn").addEventListener("click", () => {
+            saveHistory();
+            initPixels();
+        });
+
+        // JSON Export / Import / Screenshot
+        // Neuer Export-Handler: Flat-Hex, Run-Length-Encoding, PixArt-Format
+        document.getElementById("exportBtn").addEventListener("click", () => {
+            const flatHex = [];
+            for (let y = 0; y < matrixH; y++) {
+                for (let x = 0; x < matrixW; x++) {
+                    const [r, g, b] = pixels[y][x];
+                    const hex = ((1 << 24) | (r << 16) | (g << 8) | b)
+                        .toString(16)
+                        .slice(1)
+                        .toUpperCase();
+                    flatHex.push(hex);
+                }
+            }
+
+            const runs = [];
+            let i = 0, len = flatHex.length;
+            while (i < len) {
+                const color = flatHex[i];
+                let j = i + 1;
+                while (j < len && flatHex[j] === color) j++;
+                runs.push([i, j - 1, color]);
+                i = j;
+            }
+
+            const compressed = [];
+            runs.forEach(run => compressed.push(run[0], run[1], run[2]));
+
+            const payload = { on: true, bri: 255, seg: { id: 0, i: compressed } };
+
+            const json = JSON.stringify(payload);
+            navigator.clipboard.writeText(json)
+                .then(() => alert("JSON kopiert!"))
+                .catch(err => alert("Fehler beim Kopieren: " + err));
+        });
+
+        document.getElementById("saveBtn").addEventListener("click", () => {
+            const blob = new Blob([JSON.stringify(pixels)], { type: "application/json" });
+            const url = URL.createObjectURL(blob);
+            const a = document.createElement("a");
+            a.href = url;
+            a.download = "matrix.json";
+            a.click();
+        });
+        document.getElementById("loadFile").addEventListener("change", (e) => {
+            const file = e.target.files[0];
+            const reader = new FileReader();
+            reader.onload = () => {
+                pixels = JSON.parse(reader.result);
+                drawMatrix();
+            };
+            reader.readAsText(file);
+        });
+        document.getElementById("screenshotBtn").addEventListener("click", () => {
+            const link = document.createElement("a");
+            link.href = canvas.toDataURL();
+            link.download = "matrix.png";
+            link.click();
+        });
+
+        // WLED senden
+        document.getElementById("sendBtn").addEventListener("click", () => {
+            const ip = document.getElementById("wledIp").value.trim();
+            if (!ip) return alert("Bitte WLED IP eingeben!");
+            const flat = [];
+            for (let y = 0; y < matrixH; y++) {
+                for (let x = 0; x < matrixW; x++) {
+                    flat.push(...pixels[y][x]);
+                }
+            }
+            fetch(`http://${ip}/json/state`, {
+                method: "POST",
+                headers: { "Content-Type": "application/json" },
+                body: JSON.stringify({ seg: [{ i: flat }] })
+            }).then(res => {
+                document.getElementById("status").innerText = res.ok ? "Erfolgreich gesendet!" : "Fehler!";
+            }).catch(() => {
+                document.getElementById("status").innerText = "Fehler!";
+            });
+        });
+
+        // Matrix-Größe / Pixelgröße / Gitter / Hintergrund
+        document.getElementById("matrixSize").addEventListener("change", (e) => {
+            const parts = e.target.value.split("x");
+            matrixW = parseInt(parts[0]);
+            matrixH = parseInt(parts[1]);
+            initPixels();
+        });
+        document.getElementById("pixelSize").addEventListener("input", (e) => {
+            pixelSize = parseInt(e.target.value);
+            drawMatrix();
+        });
+        document.getElementById("gridToggle").addEventListener("click", () => {
+            gridOn = !gridOn;
+            document.getElementById("gridToggle").innerText = "Gitter: " + (gridOn ? "An" : "Aus");
+            drawMatrix();
+        });
+        document.getElementById("bgToggle").addEventListener("click", () => {
+            bgDark = !bgDark;
+            document.getElementById("bgToggle").innerText = "Hintergrund: " + (bgDark ? "Dunkel" : "Hell");
+            drawMatrix();
+        });
+
+        // Pfeiltasten verschieben
+        document.addEventListener("keydown", (e) => {
+            if (["ArrowUp", "ArrowDown", "ArrowLeft", "ArrowRight"].includes(e.key)) {
+                saveHistory();
+                let newPixels = [];
+                for (let y = 0; y < matrixH; y++) {
+                    let row = [];
+                    for (let x = 0; x < matrixW; x++) {
+                        row.push([0, 0, 0]);
+                    }
+                    newPixels.push(row);
+                }
+                for (let y = 0; y < matrixH; y++) {
+                    for (let x = 0; x < matrixW; x++) {
+                        let ny = y + (e.key === "ArrowDown" ? -1 : e.key === "ArrowUp" ? 1 : 0);
+                        let nx = x + (e.key === "ArrowRight" ? -1 : e.key === "ArrowLeft" ? 1 : 0);
+                        if (ny >= 0 && ny < matrixH && nx >= 0 && nx < matrixW) {
+                            newPixels[y][x] = pixels[ny][nx];
+                        }
+                    }
+                }
+                pixels = newPixels;
+                drawMatrix();
+            }
+        });
+
+        // Init
+        initPixels();
+    </script>
 </body>
+
 </html>
